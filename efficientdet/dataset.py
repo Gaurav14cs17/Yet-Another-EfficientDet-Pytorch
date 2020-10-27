@@ -104,8 +104,8 @@ class TobyCustom(Dataset):
         self.labels = {0: 'ROI'}
     
     def __len__(self):
-        # return self.image_nums
-        return 10
+        return self.image_nums
+        # return 10
 
     def __getitem__(self, idx):
         # close
