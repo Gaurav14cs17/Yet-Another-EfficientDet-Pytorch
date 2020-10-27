@@ -1,6 +1,7 @@
 import os
 import torch
 import numpy as np
+import pickle
 
 from torch.utils.data import Dataset, DataLoader
 from pycocotools.coco import COCO
@@ -82,6 +83,57 @@ class CocoDataset(Dataset):
 
         return annotations
 
+class TobyCustom(Dataset):
+    def __init__(self, root_dir, side_dir, annot_path, val = False ,transform=None):
+        # root_dir: 'D:/Etri_tracking_data/Etri_full/image_4channels_vol1/
+        self.root_dir = root_dir
+        # 'D:/Etri_tracking_data/Etri_full/image_vol1_Sejin/'
+        self.side_dir = side_dir
+        self.transform = transform
+        self.val = val
+        with open(annot_path, 'r') as f:
+            self.annot = f.readlines()
+
+        if not self.val:
+            # self.image_ids = 16200
+            self.image_nums = 16980
+        else:
+            self.image_nums = 1020
+        # self.load_classes()
+        self.classes = {'ROI': 0}
+        self.labels = {0: 'ROI'}
+    
+    def __len__(self):
+        # return self.image_nums
+        return 10
+
+    def __getitem__(self, idx):
+        # close
+        if self.val:
+            idx += 16980
+        img = self.load_image(idx)
+        other_path = self.side_dir + str(idx) + '.png'
+        last_layer = cv2.imread(other_path, 0)
+        last_layer = np.expand_dims(last_layer, axis = -1)
+        img = np.concatenate((img,last_layer), axis = 2)
+        annot = self.load_annotations(idx)
+        sample = {'img': img, 'annot': annot}
+        if self.transform:
+            sample = self.transform(sample)
+        return sample
+
+    def load_image(self, image_index):
+        path = self.root_dir + str(image_index) + '.png'
+        img = cv2.imread(path)
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+
+        return img.astype(np.float32) / 255.
+
+    def load_annotations(self, image_index):
+        annotation = [[float(i) for i in self.annot[image_index].split(',')] + [0]]
+        # print(np.array(annotation))
+        return np.array(annotation)
+
 
 def collater(data):
     imgs = [s['img'] for s in data]
@@ -127,7 +179,7 @@ class Resizer(object):
 
         image = cv2.resize(image, (resized_width, resized_height), interpolation=cv2.INTER_LINEAR)
 
-        new_image = np.zeros((self.img_size, self.img_size, 3))
+        new_image = np.zeros((self.img_size, self.img_size, 4))
         new_image[0:resized_height, 0:resized_width] = image
 
         annots[:, :4] *= scale
@@ -160,7 +212,9 @@ class Augmenter(object):
 
 class Normalizer(object):
 
-    def __init__(self, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]):
+    def __init__(self, mean=[0.485, 0.456, 0.406, 0.5], std=[0.229, 0.224, 0.225, 1]):
+        mean=[0.485, 0.456, 0.406, 0.5] 
+        std=[0.229, 0.224, 0.225, 1]
         self.mean = np.array([[mean]])
         self.std = np.array([[std]])
 
