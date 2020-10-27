@@ -36,7 +36,7 @@ def get_args():
     parser.add_argument('-p', '--project', type=str, default='coco', help='project file that contains parameters')
     parser.add_argument('-c', '--compound_coef', type=int, default=4, help='coefficients of efficientdet')
     parser.add_argument('-n', '--num_workers', type=int, default=0, help='num_workers of dataloader')
-    parser.add_argument('--batch_size', type=int, default=1, help='The number of images per batch among all devices')
+    parser.add_argument('--batch_size', type=int, default=4, help='The number of images per batch among all devices')
     parser.add_argument('--head_only', type=boolean_string, default=False,
                         help='whether finetunes only the regressor and the classifier, '
                              'useful in early stage convergence or small/easy dataset')
@@ -52,10 +52,10 @@ def get_args():
     parser.add_argument('--es_patience', type=int, default=0,
                         help='Early stopping\'s parameter: number of epochs with no improvement after which training will be stopped. Set to 0 to disable this technique.')
     parser.add_argument('--data_path', type=str, default='datasets/', help='the root folder of dataset')
-    parser.add_argument('--log_path', type=str, default='C:/Users/giang/Desktop/result/')
+    parser.add_argument('--log_path', type=str, default='/home/vcl/giang/result/')
     parser.add_argument('-w', '--load_weights', type=str, default='./weights/efficientdet-d4.pth',
                         help='whether to load weights from a checkpoint, set None to initialize, set \'last\' to load last checkpoint')
-    parser.add_argument('--saved_path', type=str, default='C:/Users/giang/Desktop/result/save/')
+    parser.add_argument('--saved_path', type=str, default='/home/vcl/giang/result/save/')
     parser.add_argument('--debug', type=boolean_string, default=False,
                         help='whether visualize the predicted boxes of training, '
                              'the output images will be in test/')
@@ -83,7 +83,7 @@ class ModelWithLoss(nn.Module):
 
 def train(opt):
     params = Params(f'projects/{opt.project}.yml')
-
+    params.num_gpus = 4
     if params.num_gpus == 0:
         os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
 
@@ -111,9 +111,12 @@ def train(opt):
 
     input_sizes = [512, 640, 768, 896, 1024, 1280, 1280, 1536, 1536]
 
-    root = 'D:/Etri_tracking_data/Etri_full/image_crop_1175x7680/'
-    side = 'D:/Etri_tracking_data/Etri_full/image_vol1_Sejin/'
-    ground_truth = 'C:/Users/giang/Desktop/specific_train.txt'
+    # root = 'D:/Etri_tracking_data/Etri_full/image_crop_1175x7680/'
+    # side = 'D:/Etri_tracking_data/Etri_full/image_vol1_Sejin/'
+    # ground_truth = 'C:/Users/giang/Desktop/specific_train.txt'
+    root = '/home/../../data3/giangData/image_crop_1175x7680/'
+    side = '/home/../../data3/giangData/image_vol1_Sejin/'
+    ground_truth = '/home/../../data3/giangData/specific_train.txt'
     training_set = TobyCustom(root_dir=root, side_dir = side, annot_path = ground_truth,
                                transform=transforms.Compose([Normalizer(mean=params.mean, std=params.std),
                                                              Augmenter(),
