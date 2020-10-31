@@ -258,7 +258,7 @@ class Brightness(object):
     def __init__(self, brightness_limit = 0.2, constrast_limit = 0.2, brightness_by_max=True):
         assert constrast_limit >= 0
         self.beta = 0 + np.random.uniform(-brightness_limit, brightness_limit)
-        self.beta_by_max = self.brightness_by_max
+        self.beta_by_max = brightness_by_max
 
     def __call__(self, p = 0.5):
         if np.random.rand() < p:
