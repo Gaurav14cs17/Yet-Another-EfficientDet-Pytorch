@@ -17,11 +17,10 @@ from torchvision import transforms
 from tqdm.autonotebook import tqdm
 
 from backbone import EfficientDetBackbone
-from efficientdet.dataset import CocoDataset, Resizer, Normalizer, Augmenter, collater, TobyCustom
+from efficientdet.dataset import Resizer, Flip_X, Flip_Y, Normalizer, Equalize, Brightness, ComposeAlb, Constrast, collater, TobyCustom
 from efficientdet.loss import FocalLoss
 from utils.sync_batchnorm import patch_replication_callback
 from utils.utils import replace_w_sync_bn, CustomDataParallel, get_last_weights, init_weights, boolean_string
-
 
 class Params:
     def __init__(self, project_file):
@@ -114,18 +113,27 @@ def train(opt):
     # root = 'D:/Etri_tracking_data/Etri_full/image_crop_1175x7680/'
     # side = 'D:/Etri_tracking_data/Etri_full/image_vol1_Sejin/'
     # ground_truth = 'C:/Users/giang/Desktop/specific_train.txt'
-    root = '/home/../../data3/giangData/image_crop_1175x7680/'
-    side = '/home/../../data3/giangData/image_vol1_Sejin/'
-    ground_truth = '/home/../../data3/giangData/specific_train.txt'
+    root_train = '/home/../../data3/giangData/train_1024/'
+    side_train = '/home/../../data3/giangData/train_Sejin_1024/'
+    ground_truth_train = '/home/../../data3/giangData/train_1024.txt'
+    
     training_set = TobyCustom(root_dir=root, side_dir = side, annot_path = ground_truth,
-                               transform=transforms.Compose([Normalizer(mean=params.mean, std=params.std),
-                                                             Augmenter(),
-                                                             Resizer(input_sizes[opt.compound_coef])]))
+                               transform=ComposeAlb([Flip_X(),
+                                                    Flip_Y(),
+                                                    Equalize(),
+                                                    Brightness(),
+                                                    Constrast(),
+                                                    Resizer(input_sizes[opt.compound_coef]),
+                                                    Normalizer()]))
     training_generator = DataLoader(training_set, **training_params)
 
+    root_train = '/home/../../data3/giangData/val_1024/'
+    side_train = '/home/../../data3/giangData/val_Sejin_1024/'
+    ground_truth_train = '/home/../../data3/giangData/val_1024.txt'
+    
     val_set = TobyCustom(root_dir=root, side_dir = side, annot_path = ground_truth, val = True,
-                          transform=transforms.Compose([Normalizer(mean=params.mean, std=params.std),
-                                                        Resizer(input_sizes[opt.compound_coef])]))
+                          transform=ComposeAlb([Resizer(input_sizes[opt.compound_coef]),
+                                                Normalizer()], p=1))
     val_generator = DataLoader(val_set, **val_params)
 
     model = EfficientDetBackbone(num_classes=len(params.obj_list), compound_coef=opt.compound_coef,

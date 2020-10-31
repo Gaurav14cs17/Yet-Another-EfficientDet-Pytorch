@@ -84,37 +84,36 @@ class CocoDataset(Dataset):
         return annotations
 
 class TobyCustom(Dataset):
+    '''
+    Config dataset to load the fourth channel image and concate it to the original image,
+        and to easier to load my data.
+    '''
     def __init__(self, root_dir, side_dir, annot_path, val = False ,transform=None):
         # root_dir: 'D:/Etri_tracking_data/Etri_full/image_4channels_vol1/
         self.root_dir = root_dir
         # 'D:/Etri_tracking_data/Etri_full/image_vol1_Sejin/'
         self.side_dir = side_dir
         self.transform = transform
-        self.val = val
+        self.names = os.listdir(self.root_dir)
+        self.names.sort()
         with open(annot_path, 'r') as f:
             self.annot = f.readlines()
-
-        if not self.val:
-            # self.image_ids = 16200
-            self.image_nums = 16980
-        else:
-            self.image_nums = 1020
-        # self.load_classes()
         self.classes = {'ROI': 0}
         self.labels = {0: 'ROI'}
     
     def __len__(self):
-        return self.image_nums
+        return len(self.names)
         # return 10
 
     def __getitem__(self, idx):
         # close
-        if self.val:
-            idx += 16980
-        img = self.load_image(idx)
-        other_path = self.side_dir + str(idx) + '.png'
+        image_path = self.names[idx]
+        img = self.load_image(image_path)
+        other_path = self.side_dir + image_path
         last_layer = cv2.imread(other_path, 0)
-        last_layer = np.expand_dims(last_layer, axis = -1)
+        last_layer = np.expand_dims(last_layer, axis = -1).astype(np)
+        # Forgot last time
+        last_layer/=255.
         img = np.concatenate((img,last_layer), axis = 2)
         annot = self.load_annotations(idx)
         sample = {'img': img, 'annot': annot}
@@ -122,20 +121,19 @@ class TobyCustom(Dataset):
             sample = self.transform(sample)
         return sample
 
-    def load_image(self, image_index):
-        path = self.root_dir + str(image_index) + '.png'
+    def load_image(self, image_path):
+        path = self.root_dir + image_path
         img = cv2.imread(path)
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-
         return img.astype(np.float32) / 255.
 
     def load_annotations(self, image_index):
         annotation = [[float(i) for i in self.annot[image_index].split(',')] + [0]]
-        # print(np.array(annotation))
         return np.array(annotation)
 
 
 def collater(data):
+    ''' Convert numpy array to Tensor '''
     imgs = [s['img'] for s in data]
     annots = [s['annot'] for s in data]
     scales = [s['scale'] for s in data]
@@ -187,11 +185,10 @@ class Resizer(object):
         return {'img': torch.from_numpy(new_image).to(torch.float32), 'annot': torch.from_numpy(annots), 'scale': scale}
 
 
-class Augmenter(object):
-    """Convert ndarrays in sample to Tensors."""
-
-    def __call__(self, sample, flip_x=0.5):
-        if np.random.rand() < flip_x:
+class Flip_X(object):
+    ''' Flip image by X axis '''
+    def __call__(self, sample, p=0.5):
+        if np.random.rand() < p:
             image, annots = sample['img'], sample['annot']
             image = image[:, ::-1, :]
 
@@ -209,11 +206,32 @@ class Augmenter(object):
 
         return sample
 
+class Flip_Y(object):
+    ''' Flip image by Y axis '''
+    def __call__(self, sample, p=0.5):
+        if np.random.rand() < p:
+            image, annots = sample['img'], sample['annot']
+            image = image[:, :, ::-1]
+
+            rows, cols, channels = image.shape
+
+            y1 = annots[:, 1].copy()
+            y2 = annots[:, 3].copy()
+
+            y_tmp = y1.copy()
+
+            annots[:, 1] = cols - y2
+            annots[:, 3] = cols - y_tmp
+
+            sample = {'img': image, 'annot': annots}
+
+        return sample
+
 
 class Normalizer(object):
-
-    def __init__(self, mean=[0.485, 0.456, 0.406, 0.5], std=[0.229, 0.224, 0.225, 1]):
-        mean=[0.485, 0.456, 0.406, 0.5] 
+    ''' Normalize image by it means and std, this mean and std from COCO '''
+    def __init__(self, mean=[0.485, 0.456, 0.406, 0.5], std=[0.229, 0.224, 0.225, 0.5]):
+        mean=[0.485, 0.456, 0.406, 0] 
         std=[0.229, 0.224, 0.225, 1]
         self.mean = np.array([[mean]])
         self.std = np.array([[std]])
@@ -222,3 +240,91 @@ class Normalizer(object):
         image, annots = sample['img'], sample['annot']
 
         return {'img': ((image.astype(np.float32) - self.mean) / self.std), 'annot': annots}
+
+class Equalize(object):
+    ''' Equalized by it histogram '''
+    def __call__(self, p = 0.5):
+        if np.random.rand() < p:
+            image, annots = sample['img'], sample['annot']
+            image = self.apply(image)
+            sample = {'img': image, 'annot': annots}
+            return sample
+
+    def apply(self, img, mask=None):
+        return cv2.equalizeHist(img)
+
+class Brightness(object):
+    ''' Change brightness of image '''
+    def __init__(self, brightness_limit = 0.2, constrast_limit = 0.2, brightness_by_max=True):
+        assert constrast_limit >= 0
+        self.beta = 0 + np.random.uniform(-brightness_limit, brightness_limit)
+        self.beta_by_max = self.brightness_by_max
+
+    def __call__(self, p = 0.5):
+        if np.random.rand() < p:
+            image, annots = sample['img'], sample['annot']
+            image = self.apply(image)
+            sample = {'img': image, 'annot': annots}
+            return sample 
+
+    def apply(self, img):
+        dtype = np.dtype("uint8")
+        max_value = 255
+        lut = np.arange(0, max_value + 1).astype("float32")
+        if self.beta != 0:
+            if self.beta_by_max:
+                lut += self.beta * max_value
+            else:
+                lut += self.beta * np.mean(img)
+        lut = np.clip(lut, 0, max_value).astype(dtype)
+        img = cv2.LUT(img, lut)
+        return img
+
+class Constrast(object):
+    ''' Change constrast of image '''
+    def __init__(self, constrast_limit = 0.2):
+        assert constrast_limit >= 0
+        self.alpha = 1 + np.random.uniform(-constrast_limit, constrast_limit)
+
+    def __call__(self, p = 0.5):
+        if np.random.rand() < p:
+            image, annots = sample['img'], sample['annot']
+            image = self.apply(image)
+            sample = {'img': image, 'annot': annots}
+            return sample 
+
+    def apply(self, img):
+        dtype = np.dtype("uint8")
+        max_value = 255
+        lut = np.arange(0, max_value + 1).astype("float32")
+        if self.alpha != 1:
+            lut *= self.alpha
+        lut = np.clip(lut, 0, max_value).astype(dtype)
+        img = cv2.LUT(img, lut)
+        return img
+
+
+
+from torchvision.transforms import Compose
+
+class ComposeAlb(Compose):
+    ''' Add the probability to augment an image in normal Compose from Pytorch '''
+    def __init__(self, transforms, p = 0.5):
+        self.augment = dict()
+        self.transforms = transforms
+        for t in transforms:
+            self.augment[t.__class__.__name__] = t
+        if 'Resizer' not in self.augment.keys() or 'Normalizer' not in self.augment.keys():
+            raise Exception('Please check if there are Resizer and Normalizer or not? If you want that, please modify the code -> just need to comment those lines :3')
+        self.p = p
+        
+    def __call__(self, img):
+        if np.random.rand() < p:
+            for n,a in self.augment.item():
+                if n in ['Resizer', 'Normalizer']:
+                    continue
+                else:
+                    img = a(img)
+            img = self.augment['Resizer'](img)
+            img = self.augment['Normalizer'](img)
+        return img 

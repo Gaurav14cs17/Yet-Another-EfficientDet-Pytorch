@@ -15,9 +15,31 @@ import numpy as np
 from efficientdet.utils import BBoxTransform, ClipBoxes
 from utils.utils import preprocess, invert_affine, postprocess, STANDARD_COLORS, standard_to_bgr, get_index_label, plot_one_box
 
-compound_coef = 0
+import argparse
+import datetime
+import os
+import traceback
+
+import numpy as np
+import torch
+import yaml
+from tensorboardX import SummaryWriter
+from torch import nn
+from torch.utils.data import DataLoader
+from torchvision import transforms
+from tqdm.autonotebook import tqdm
+
+from backbone import EfficientDetBackbone
+from efficientdet.dataset import CocoDataset, Resizer, Normalizer, Augmenter, collater, TobyCustom
+from efficientdet.loss import FocalLoss
+from utils.sync_batchnorm import patch_replication_callback
+from utils.utils import replace_w_sync_bn, CustomDataParallel, get_last_weights, init_weights, boolean_string
+
+from tqdm import tqdm
+
+compound_coef = 4
 force_input_size = None  # set None to use default size
-img_path = 'test/img.png'
+# img_path = 'test/img.png'
 
 # replace this part with your project's anchor config
 anchor_ratios = [(1.0, 1.0), (1.4, 0.7), (0.7, 1.4)]
@@ -28,37 +50,44 @@ iou_threshold = 0.2
 
 use_cuda = True
 use_float16 = False
-cudnn.fastest = True
-cudnn.benchmark = True
+# cudnn.fastest = True
+# cudnn.benchmark = True
 
-obj_list = ['person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus', 'train', 'truck', 'boat', 'traffic light',
-            'fire hydrant', '', 'stop sign', 'parking meter', 'bench', 'bird', 'cat', 'dog', 'horse', 'sheep',
-            'cow', 'elephant', 'bear', 'zebra', 'giraffe', '', 'backpack', 'umbrella', '', '', 'handbag', 'tie',
-            'suitcase', 'frisbee', 'skis', 'snowboard', 'sports ball', 'kite', 'baseball bat', 'baseball glove',
-            'skateboard', 'surfboard', 'tennis racket', 'bottle', '', 'wine glass', 'cup', 'fork', 'knife', 'spoon',
-            'bowl', 'banana', 'apple', 'sandwich', 'orange', 'broccoli', 'carrot', 'hot dog', 'pizza', 'donut',
-            'cake', 'chair', 'couch', 'potted plant', 'bed', '', 'dining table', '', '', 'toilet', '', 'tv',
-            'laptop', 'mouse', 'remote', 'keyboard', 'cell phone', 'microwave', 'oven', 'toaster', 'sink',
-            'refrigerator', '', 'book', 'clock', 'vase', 'scissors', 'teddy bear', 'hair drier',
-            'toothbrush']
+# obj_list = ['person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus', 'train', 'truck', 'boat', 'traffic light',
+#             'fire hydrant', '', 'stop sign', 'parking meter', 'bench', 'bird', 'cat', 'dog', 'horse', 'sheep',
+#             'cow', 'elephant', 'bear', 'zebra', 'giraffe', '', 'backpack', 'umbrella', '', '', 'handbag', 'tie',
+#             'suitcase', 'frisbee', 'skis', 'snowboard', 'sports ball', 'kite', 'baseball bat', 'baseball glove',
+#             'skateboard', 'surfboard', 'tennis racket', 'bottle', '', 'wine glass', 'cup', 'fork', 'knife', 'spoon',
+#             'bowl', 'banana', 'apple', 'sandwich', 'orange', 'broccoli', 'carrot', 'hot dog', 'pizza', 'donut',
+#             'cake', 'chair', 'couch', 'potted plant', 'bed', '', 'dining table', '', '', 'toilet', '', 'tv',
+#             'laptop', 'mouse', 'remote', 'keyboard', 'cell phone', 'microwave', 'oven', 'toaster', 'sink',
+#             'refrigerator', '', 'book', 'clock', 'vase', 'scissors', 'teddy bear', 'hair drier',
+#             'toothbrush']
+
+obj_list = ['ROI']
 
 
 color_list = standard_to_bgr(STANDARD_COLORS)
 # tf bilinear interpolation is different from any other's, just make do
 input_sizes = [512, 640, 768, 896, 1024, 1280, 1280, 1536, 1536]
 input_size = input_sizes[compound_coef] if force_input_size is None else force_input_size
-ori_imgs, framed_imgs, framed_metas = preprocess(img_path, max_size=input_size)
+# ori_imgs, framed_imgs, framed_metas = preprocess(img_path, max_size=input_size)
 
-if use_cuda:
-    x = torch.stack([torch.from_numpy(fi).cuda() for fi in framed_imgs], 0)
-else:
-    x = torch.stack([torch.from_numpy(fi) for fi in framed_imgs], 0)
+# if use_cuda:
+#     x = torch.stack([torch.from_numpy(fi).cuda() for fi in framed_imgs], 0)
+# else:
+#     x = torch.stack([torch.from_numpy(fi) for fi in framed_imgs], 0)
 
-x = x.to(torch.float32 if not use_float16 else torch.float16).permute(0, 3, 1, 2)
+# x = x.to(torch.float32 if not use_float16 else torch.float16).permute(0, 3, 1, 2)
 
-model = EfficientDetBackbone(compound_coef=compound_coef, num_classes=len(obj_list),
+model = EfficientDetBackbone(compound_coef=compound_coef, num_classes=90,
                              ratios=anchor_ratios, scales=anchor_scales)
-model.load_state_dict(torch.load(f'weights/efficientdet-d{compound_coef}.pth', map_location='cpu'))
+weights_path = './weights/efficientdet-d4.pth'
+model.load_state_dict(torch.load(weights_path), strict=False)
+model.backbone_net.model._conv_stem.conv = nn.Conv2d(4, 48, kernel_size=(3, 3), stride=(2, 2), bias=False)
+
+model.load_state_dict(torch.load('C:/Users/giang/Desktop/etri/code/result/save/coco/efficientdet-d4_9_40000.pth', map_location='cpu'))
+# model.load_state_dict(torch.load(f'weights/efficientdet-d{compound_coef}.pth', map_location='cpu'))
 model.requires_grad_(False)
 model.eval()
 
@@ -67,16 +96,121 @@ if use_cuda:
 if use_float16:
     model = model.half()
 
+
+class Params:
+    def __init__(self, project_file):
+        self.params = yaml.safe_load(open(project_file).read())
+
+    def __getattr__(self, item):
+        return self.params.get(item, None)
+
+params = Params(f'projects/coco.yml')
+params.num_gpus = 1
+if params.num_gpus == 0:
+    os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
+
+if torch.cuda.is_available():
+    torch.cuda.manual_seed(42)
+else:
+    torch.manual_seed(42)
+
+# opt.saved_path = opt.saved_path + f'/{params.project_name}/'
+# opt.log_path = opt.log_path + f'/{params.project_name}/tensorboard/'
+# os.makedirs(opt.log_path, exist_ok=True)
+# os.makedirs(opt.saved_path, exist_ok=True)
+
+
+val_params = {'batch_size': 1,
+                'shuffle': False,
+                'drop_last': True,
+                'collate_fn': collater,
+                'num_workers': 0}
+
+input_sizes = [512, 640, 768, 896, 1024, 1280, 1280, 1536, 1536]
+
+root = 'D:/Etri_tracking_data/Etri_full/image_crop_1175x7680/'
+side = 'D:/Etri_tracking_data/Etri_full/image_vol1_Sejin/'
+ground_truth = 'C:/Users/giang/Desktop/etri/code/specific_train.txt'
+# root = '/home/../../data3/giangData/image_crop_1175x7680/'
+# side = '/home/../../data3/giangData/image_vol1_Sejin/'
+# ground_truth = '/home/../../data3/giangData/specific_train.txt'
+
+val_set = TobyCustom(root_dir=root, side_dir = side, annot_path = ground_truth, val = True,
+                        transform=transforms.Compose([Normalizer(mean=params.mean, std=params.std),
+                                                    Resizer(input_sizes[4])]))
+val_generator = DataLoader(val_set, **val_params)
+
+
 with torch.no_grad():
-    features, regression, classification, anchors = model(x)
+    for iter, data in enumerate(val_generator):
+        imgs = data['img']
+        print(torch.max(imgs))
+        print(imgs.shape)
+        from matplotlib import pyplot as plt
+        image = imgs[0]
+        
+        image = image[0:3,:,:]
+        mean=np.array([[[0.485, 0.456, 0.406]]])
+        mean = np.reshape(mean, mean.shape[::-1]) 
+        std = np.array([[[0.229, 0.224, 0.225]]])
+        std = np.reshape(std, std.shape[::-1])
+        image*=std
+        image+=mean
+        image*=255
+        image = image.type(torch.int32)
+        image = image.numpy()
+        image = np.einsum('abc->bca',image)
+        image = image[:,:,::-1]
+        # print(torch.max(image))
+        # print(torch.min(image))
+        print(image.shape)
+        # print(image)
+        import cv2
 
-    regressBoxes = BBoxTransform()
-    clipBoxes = ClipBoxes()
+        # print(image)
+        cv2.imwrite('C:/Users/giang/Desktop/some.png', image)
+        annot = data['annot']
 
-    out = postprocess(x,
-                      anchors, regression, classification,
-                      regressBoxes, clipBoxes,
-                      threshold, iou_threshold)
+        if params.num_gpus == 1:
+            imgs = imgs.cuda()
+            annot = annot.cuda()
+
+        _, regression, classification, anchors = model(imgs)
+        print(regression)
+        print(regression.shape)
+        break
+        regressBoxes = BBoxTransform()
+        clipBoxes = ClipBoxes()
+
+        out = postprocess(x,
+                        anchors, regression, classification,
+                        regressBoxes, clipBoxes,
+                        threshold, iou_threshold)
+        print(out)
+        
+
+
+
+
+# with torch.no_grad():
+#     for i, data in enumerate(tqdm(val_generator, position=0, leave=True)):
+#         # data_batch = data.to(device)
+#         print(dict)
+#         data_bath = data.cuda()
+                            
+#         b_size = data_batch.size(0)
+
+#         features, regression, classification, anchors = model(data_batch)
+
+#         regressBoxes = BBoxTransform()
+#         clipBoxes = ClipBoxes()
+
+#         out = postprocess(x,
+#                         anchors, regression, classification,
+#                         regressBoxes, clipBoxes,
+#                         threshold, iou_threshold)
+#         print(out)
+#         break
 
 def display(preds, imgs, imshow=True, imwrite=False):
     for i in range(len(imgs)):
@@ -100,26 +234,26 @@ def display(preds, imgs, imshow=True, imwrite=False):
             cv2.imwrite(f'test/img_inferred_d{compound_coef}_this_repo_{i}.jpg', imgs[i])
 
 
-out = invert_affine(framed_metas, out)
-display(out, ori_imgs, imshow=False, imwrite=True)
+# out = invert_affine(framed_metas, out)
+# display(out, ori_imgs, imshow=False, imwrite=True)
 
-print('running speed test...')
-with torch.no_grad():
-    print('test1: model inferring and postprocessing')
-    print('inferring image for 10 times...')
-    t1 = time.time()
-    for _ in range(10):
-        _, regression, classification, anchors = model(x)
+# print('running speed test...')
+# with torch.no_grad():
+#     print('test1: model inferring and postprocessing')
+#     print('inferring image for 10 times...')
+#     t1 = time.time()
+#     for _ in range(10):
+#         _, regression, classification, anchors = model(x)
 
-        out = postprocess(x,
-                          anchors, regression, classification,
-                          regressBoxes, clipBoxes,
-                          threshold, iou_threshold)
-        out = invert_affine(framed_metas, out)
+#         out = postprocess(x,
+#                           anchors, regression, classification,
+#                           regressBoxes, clipBoxes,
+#                           threshold, iou_threshold)
+#         out = invert_affine(framed_metas, out)
 
-    t2 = time.time()
-    tact_time = (t2 - t1) / 10
-    print(f'{tact_time} seconds, {1 / tact_time} FPS, @batch_size 1')
+#     t2 = time.time()
+#     tact_time = (t2 - t1) / 10
+#     print(f'{tact_time} seconds, {1 / tact_time} FPS, @batch_size 1')
 
     # uncomment this if you want a extreme fps test
     # print('test2: model inferring only')
