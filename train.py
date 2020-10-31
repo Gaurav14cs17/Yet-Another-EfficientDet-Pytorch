@@ -117,23 +117,25 @@ def train(opt):
     side_train = '/home/../../data3/giangData/train_Sejin_1024/'
     ground_truth_train = '/home/../../data3/giangData/train_1024.txt'
     
-    training_set = TobyCustom(root_dir=root, side_dir = side, annot_path = ground_truth,
-                               transform=ComposeAlb([Flip_X(),
-                                                    Flip_Y(),
-                                                    Equalize(),
-                                                    Brightness(),
-                                                    Constrast(),
-                                                    Resizer(input_sizes[opt.compound_coef]),
-                                                    Normalizer()]))
+    training_set = TobyCustom(root_dir=root_train, side_dir = side_train, \
+                              annot_path = ground_truth_train, \
+                              transform=ComposeAlb([Flip_X(), \
+                                                    Flip_Y(), \
+                                                    Equalize(), \
+                                                    Brightness(), \
+                                                    Constrast(), \
+                                                    Resizer(input_sizes[opt.compound_coef]), \
+                                                    Normalizer()])) \
     training_generator = DataLoader(training_set, **training_params)
 
-    root_train = '/home/../../data3/giangData/val_1024/'
-    side_train = '/home/../../data3/giangData/val_Sejin_1024/'
-    ground_truth_train = '/home/../../data3/giangData/val_1024.txt'
+    root_val = '/home/../../data3/giangData/val_1024/'
+    side_val = '/home/../../data3/giangData/val_Sejin_1024/'
+    ground_truth_val = '/home/../../data3/giangData/val_1024.txt'
     
-    val_set = TobyCustom(root_dir=root, side_dir = side, annot_path = ground_truth, val = True,
-                          transform=ComposeAlb([Resizer(input_sizes[opt.compound_coef]),
-                                                Normalizer()], p=1))
+    val_set = TobyCustom(root_dir=root_val, side_dir = side_val, \
+                         annot_path = ground_truth_val, \
+                         transform=ComposeAlb([Resizer(input_sizes[opt.compound_coef]),
+                                               Normalizer()]))
     val_generator = DataLoader(val_set, **val_params)
 
     model = EfficientDetBackbone(num_classes=len(params.obj_list), compound_coef=opt.compound_coef,
