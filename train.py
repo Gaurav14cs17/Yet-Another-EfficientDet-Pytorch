@@ -125,7 +125,7 @@ def train(opt):
                                                     Brightness(), \
                                                     Constrast(), \
                                                     Resizer(input_sizes[opt.compound_coef]), \
-                                                    Normalizer()])) \
+                                                    Normalizer()])) 
     training_generator = DataLoader(training_set, **training_params)
 
     root_val = '/home/../../data3/giangData/val_1024/'
