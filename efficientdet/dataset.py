@@ -91,16 +91,17 @@ class TobyCustom(Dataset):
     def __init__(self, root_dir, side_dir, annot_path, val = False ,transform=None):
         # root_dir: 'D:/Etri_tracking_data/Etri_full/image_4channels_vol1/
         self.root_dir = root_dir
+        self.names = [int(i.split('.')[0]) for i in os.listdir(self.root_dir)]
+        self.names.sort()
+
         # 'D:/Etri_tracking_data/Etri_full/image_vol1_Sejin/'
         self.side_dir = side_dir
         self.transform = transform
-        self.names = os.listdir(self.root_dir)
-        self.names.sort()
         with open(annot_path, 'r') as f:
             self.annot = f.readlines()
         self.classes = {'ROI': 0}
         self.labels = {0: 'ROI'}
-    
+
     def __len__(self):
         return len(self.names)
         # return 10
@@ -108,12 +109,13 @@ class TobyCustom(Dataset):
     def __getitem__(self, idx):
         # close
         image_path = self.names[idx]
+        image_path = str(image_path) + '.png'
         img = self.load_image(image_path)
         other_path = self.side_dir + image_path
         last_layer = cv2.imread(other_path, 0)
-        last_layer = np.expand_dims(last_layer, axis = -1).astype(np)
+        last_layer = np.expand_dims(last_layer, axis = -1)
         # Forgot last time
-        last_layer/=255.
+        # last_layer/=255.
         img = np.concatenate((img,last_layer), axis = 2)
         annot = self.load_annotations(idx)
         sample = {'img': img, 'annot': annot}
@@ -125,7 +127,8 @@ class TobyCustom(Dataset):
         path = self.root_dir + image_path
         img = cv2.imread(path)
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        return img.astype(np.float32) / 255.
+        return img
+        # return img.astype(np.float32) / 255.
 
     def load_annotations(self, image_index):
         annotation = [[float(i) for i in self.annot[image_index].split(',')] + [0]]
@@ -164,6 +167,8 @@ class Resizer(object):
         self.img_size = img_size
 
     def __call__(self, sample):
+        # print('Resizer')
+        # print(sample)
         image, annots = sample['img'], sample['annot']
         height, width, _ = image.shape
         if height > width:
@@ -188,6 +193,8 @@ class Resizer(object):
 class Flip_X(object):
     ''' Flip image by X axis '''
     def __call__(self, sample, p=0.5):
+        # print('Flip_X')
+        # print(sample)
         if np.random.rand() < p:
             image, annots = sample['img'], sample['annot']
             image = image[:, ::-1, :]
@@ -209,6 +216,8 @@ class Flip_X(object):
 class Flip_Y(object):
     ''' Flip image by Y axis '''
     def __call__(self, sample, p=0.5):
+        # print('Flip_Y')
+        # print(sample)
         if np.random.rand() < p:
             image, annots = sample['img'], sample['annot']
             image = image[:, :, ::-1]
@@ -237,21 +246,32 @@ class Normalizer(object):
         self.std = np.array([[std]])
 
     def __call__(self, sample):
+        # print('Normalizer')
+        # print(sample)
         image, annots = sample['img'], sample['annot']
-
+        image = image.astype(np.float32)
+        image/=255.
         return {'img': ((image.astype(np.float32) - self.mean) / self.std), 'annot': annots}
 
 class Equalize(object):
     ''' Equalized by it histogram '''
-    def __call__(self, p = 0.5):
+    def __call__(self, sample, p = 0.5):
+        # print('Equalize')
+        # print(sample)
         if np.random.rand() < p:
             image, annots = sample['img'], sample['annot']
             image = self.apply(image)
             sample = {'img': image, 'annot': annots}
-            return sample
+        return sample
 
     def apply(self, img, mask=None):
-        return cv2.equalizeHist(img)
+        _,_,c = img.shape
+        if c == 1:
+            return cv2.equalizeHist(img)
+        else:
+            for i in range(c):
+                img[... , i] = cv2.equalizeHist(img[..., i])
+            return img
 
 class Brightness(object):
     ''' Change brightness of image '''
@@ -260,12 +280,14 @@ class Brightness(object):
         self.beta = 0 + np.random.uniform(-brightness_limit, brightness_limit)
         self.beta_by_max = brightness_by_max
 
-    def __call__(self, p = 0.5):
+    def __call__(self, sample, p = 0.5):
+        # print('Brightness')
+        # print(sample)
         if np.random.rand() < p:
             image, annots = sample['img'], sample['annot']
             image = self.apply(image)
             sample = {'img': image, 'annot': annots}
-            return sample 
+        return sample 
 
     def apply(self, img):
         dtype = np.dtype("uint8")
@@ -286,12 +308,14 @@ class Constrast(object):
         assert constrast_limit >= 0
         self.alpha = 1 + np.random.uniform(-constrast_limit, constrast_limit)
 
-    def __call__(self, p = 0.5):
+    def __call__(self, sample, p = 0.5):
+        # print('Constrast')
+        # print(sample)
         if np.random.rand() < p:
             image, annots = sample['img'], sample['annot']
             image = self.apply(image)
             sample = {'img': image, 'annot': annots}
-            return sample 
+        return sample 
 
     def apply(self, img):
         dtype = np.dtype("uint8")
@@ -320,11 +344,19 @@ class ComposeAlb(Compose):
         
     def __call__(self, img):
         if np.random.rand() < self.p:
-            for n,a in self.augment.item():
+            for n,a in self.augment.items():
                 if n in ['Resizer', 'Normalizer']:
                     continue
                 else:
                     img = a(img)
-            img = self.augment['Resizer'](img)
-            img = self.augment['Normalizer'](img)
+        img = self.augment['Normalizer'](img)
+        img = self.augment['Resizer'](img)
         return img 
+
+    def __repr__(self):
+        format_string = self.__class__.__name__ + '('
+        for t in self.transforms:
+            format_string += '\n'
+            format_string += '    {0}'.format(t)
+        format_string += '\n)'
+        return format_string
