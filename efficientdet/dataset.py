@@ -319,7 +319,7 @@ class ComposeAlb(Compose):
         self.p = p
         
     def __call__(self, img):
-        if np.random.rand() < p:
+        if np.random.rand() < self.p:
             for n,a in self.augment.item():
                 if n in ['Resizer', 'Normalizer']:
                     continue
