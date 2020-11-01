@@ -30,7 +30,7 @@ from torchvision import transforms
 from tqdm.autonotebook import tqdm
 
 from backbone import EfficientDetBackbone
-from efficientdet.dataset import CocoDataset, Resizer, Normalizer, Augmenter, collater, TobyCustom
+from efficientdet.dataset import Resizer, Flip_X, Flip_Y, Normalizer, Equalize, Brightness, ComposeAlb, Constrast, collater, TobyCustom
 from efficientdet.loss import FocalLoss
 from utils.sync_batchnorm import patch_replication_callback
 from utils.utils import replace_w_sync_bn, CustomDataParallel, get_last_weights, init_weights, boolean_string
@@ -50,19 +50,7 @@ iou_threshold = 0.2
 
 use_cuda = True
 use_float16 = False
-# cudnn.fastest = True
-# cudnn.benchmark = True
 
-# obj_list = ['person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus', 'train', 'truck', 'boat', 'traffic light',
-#             'fire hydrant', '', 'stop sign', 'parking meter', 'bench', 'bird', 'cat', 'dog', 'horse', 'sheep',
-#             'cow', 'elephant', 'bear', 'zebra', 'giraffe', '', 'backpack', 'umbrella', '', '', 'handbag', 'tie',
-#             'suitcase', 'frisbee', 'skis', 'snowboard', 'sports ball', 'kite', 'baseball bat', 'baseball glove',
-#             'skateboard', 'surfboard', 'tennis racket', 'bottle', '', 'wine glass', 'cup', 'fork', 'knife', 'spoon',
-#             'bowl', 'banana', 'apple', 'sandwich', 'orange', 'broccoli', 'carrot', 'hot dog', 'pizza', 'donut',
-#             'cake', 'chair', 'couch', 'potted plant', 'bed', '', 'dining table', '', '', 'toilet', '', 'tv',
-#             'laptop', 'mouse', 'remote', 'keyboard', 'cell phone', 'microwave', 'oven', 'toaster', 'sink',
-#             'refrigerator', '', 'book', 'clock', 'vase', 'scissors', 'teddy bear', 'hair drier',
-#             'toothbrush']
 
 obj_list = ['ROI']
 
@@ -71,22 +59,14 @@ color_list = standard_to_bgr(STANDARD_COLORS)
 # tf bilinear interpolation is different from any other's, just make do
 input_sizes = [512, 640, 768, 896, 1024, 1280, 1280, 1536, 1536]
 input_size = input_sizes[compound_coef] if force_input_size is None else force_input_size
-# ori_imgs, framed_imgs, framed_metas = preprocess(img_path, max_size=input_size)
-
-# if use_cuda:
-#     x = torch.stack([torch.from_numpy(fi).cuda() for fi in framed_imgs], 0)
-# else:
-#     x = torch.stack([torch.from_numpy(fi) for fi in framed_imgs], 0)
-
-# x = x.to(torch.float32 if not use_float16 else torch.float16).permute(0, 3, 1, 2)
 
 model = EfficientDetBackbone(compound_coef=compound_coef, num_classes=90,
                              ratios=anchor_ratios, scales=anchor_scales)
-weights_path = './weights/efficientdet-d4.pth'
-model.load_state_dict(torch.load(weights_path), strict=False)
+# weights_path = './weights/efficientdet-d4.pth'
+# model.load_state_dict(torch.load(weights_path), strict=False)
 model.backbone_net.model._conv_stem.conv = nn.Conv2d(4, 48, kernel_size=(3, 3), stride=(2, 2), bias=False)
 
-model.load_state_dict(torch.load('C:/Users/giang/Desktop/etri/code/result/save/coco/efficientdet-d4_9_40000.pth', map_location='cpu'))
+model.load_state_dict(torch.load('C:/Users/giang/Desktop/result/save/coco/efficientdet-d4_10_1500.pth', map_location='cpu'))
 # model.load_state_dict(torch.load(f'weights/efficientdet-d{compound_coef}.pth', map_location='cpu'))
 model.requires_grad_(False)
 model.eval()
@@ -128,47 +108,48 @@ val_params = {'batch_size': 1,
 
 input_sizes = [512, 640, 768, 896, 1024, 1280, 1280, 1536, 1536]
 
-root = 'D:/Etri_tracking_data/Etri_full/image_crop_1175x7680/'
-side = 'D:/Etri_tracking_data/Etri_full/image_vol1_Sejin/'
-ground_truth = 'C:/Users/giang/Desktop/etri/code/specific_train.txt'
+root_val = 'D:/Etri_tracking_data/Etri_full/val_1024/'
+side_val = 'D:/Etri_tracking_data/Etri_full/val_Sejin_1024/'
+ground_truth_val = 'D:/Etri_tracking_data/Etri_full/val_1024.txt'
 # root = '/home/../../data3/giangData/image_crop_1175x7680/'
 # side = '/home/../../data3/giangData/image_vol1_Sejin/'
 # ground_truth = '/home/../../data3/giangData/specific_train.txt'
 
-val_set = TobyCustom(root_dir=root, side_dir = side, annot_path = ground_truth, val = True,
-                        transform=transforms.Compose([Normalizer(mean=params.mean, std=params.std),
-                                                    Resizer(input_sizes[4])]))
+val_set = TobyCustom(root_dir=root_val, side_dir = side_val, \
+                         annot_path = ground_truth_val, \
+                         transform=ComposeAlb([Resizer(input_sizes[4]),
+                                               Normalizer()]))
 val_generator = DataLoader(val_set, **val_params)
 
 
 with torch.no_grad():
     for iter, data in enumerate(val_generator):
-        imgs = data['img']
-        print(torch.max(imgs))
-        print(imgs.shape)
-        from matplotlib import pyplot as plt
-        image = imgs[0]
+        # print(torch.max(imgs))
+        # print(imgs.shape)
+        # from matplotlib import pyplot as plt
+        # image = imgs[0]
         
-        image = image[0:3,:,:]
-        mean=np.array([[[0.485, 0.456, 0.406]]])
-        mean = np.reshape(mean, mean.shape[::-1]) 
-        std = np.array([[[0.229, 0.224, 0.225]]])
-        std = np.reshape(std, std.shape[::-1])
-        image*=std
-        image+=mean
-        image*=255
-        image = image.type(torch.int32)
-        image = image.numpy()
-        image = np.einsum('abc->bca',image)
-        image = image[:,:,::-1]
+        # image = image[0:3,:,:]
+        # mean=np.array([[[0.485, 0.456, 0.406]]])
+        # mean = np.reshape(mean, mean.shape[::-1]) 
+        # std = np.array([[[0.229, 0.224, 0.225]]])
+        # std = np.reshape(std, std.shape[::-1])
+        # image*=std
+        # image+=mean
+        # image*=255
+        # image = image.type(torch.int32)
+        # image = image.numpy()
+        # image = np.einsum('abc->bca',image)
+        # image = image[:,:,::-1]
         # print(torch.max(image))
         # print(torch.min(image))
-        print(image.shape)
+        # print(image.shape)
         # print(image)
-        import cv2
+        # import cv2
 
         # print(image)
-        cv2.imwrite('C:/Users/giang/Desktop/some.png', image)
+        # cv2.imwrite('C:/Users/giang/Desktop/some.png', image)
+        imgs = data['img']
         annot = data['annot']
 
         if params.num_gpus == 1:
@@ -176,8 +157,10 @@ with torch.no_grad():
             annot = annot.cuda()
 
         _, regression, classification, anchors = model(imgs)
-        print(regression)
+        # print(regression)
         print(regression.shape)
+        print(classification.shape)
+        print(anchors.shape)
         break
         regressBoxes = BBoxTransform()
         clipBoxes = ClipBoxes()
