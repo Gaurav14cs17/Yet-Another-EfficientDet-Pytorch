@@ -108,9 +108,12 @@ val_params = {'batch_size': 1,
 
 input_sizes = [512, 640, 768, 896, 1024, 1280, 1280, 1536, 1536]
 
-root_val = 'D:/Etri_tracking_data/Etri_full/train_1024/'
-side_val = 'D:/Etri_tracking_data/Etri_full/train_Sejin_1024/'
-ground_truth_val = 'D:/Etri_tracking_data/Etri_full/train_1024.txt'
+# root_val = 'D:/Etri_tracking_data/Etri_full/train_1024/'
+# side_val = 'D:/Etri_tracking_data/Etri_full/train_Sejin_1024/'
+# ground_truth_val = 'D:/Etri_tracking_data/Etri_full/train_1024.txt'
+root_val = 'D:/COCO/val/val2017/'
+side_val = None
+ground_truth_val = 'D:/Etri_tracking_data/Etri_full/train_1024/'
 # root = '/home/../../data3/giangData/image_crop_1175x7680/'
 # side = '/home/../../data3/giangData/image_vol1_Sejin/'
 # ground_truth = '/home/../../data3/giangData/specific_train.txt'
