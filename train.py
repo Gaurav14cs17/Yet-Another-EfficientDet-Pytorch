@@ -40,7 +40,7 @@ def get_args():
                         help='whether finetunes only the regressor and the classifier, '
                              'useful in early stage convergence or small/easy dataset')
     parser.add_argument('--lr', type=float, default=1e-4)
-    parser.add_argument('--optim', type=str, default='adamw', help='select optimizer for training, '
+    parser.add_argument('--optim', type=str, default='SGD', help='select optimizer for training, '
                                                                    'suggest using \'admaw\' until the'
                                                                    ' very final stage then switch to \'sgd\'')
     parser.add_argument('--num_epochs', type=int, default=500)
@@ -140,6 +140,14 @@ def train(opt):
 
     model = EfficientDetBackbone(num_classes=len(params.obj_list), compound_coef=opt.compound_coef,
                                  ratios=eval(params.anchors_ratios), scales=eval(params.anchors_scales))
+    from efficientdet.model import Classifier
+    model.backbone_net.model._conv_stem.conv = nn.Conv2d(4, 48, kernel_size=(3, 3), stride=(2, 2), bias=False)
+    model.classifier.header.pointwise_conv.conv = nn.Conv2d(224, 9, kernel_size=(1, 1), stride=(1, 1))
+    model.classifier = Classifier(in_channels=model.fpn_num_filters[opt.compound_coef], num_anchors=model.num_anchors,
+                                     num_classes=1,
+                                     num_layers=model.box_class_repeats[opt.compound_coef],
+                                     pyramid_levels=model.pyramid_levels[opt.compound_coef])
+    opt.load_weights = '/home/vcl/giang/result/save/coco/efficientdet-d4_53_7500.pth'
     # for EfficientNetB5, please test again with B4
 
     # load last weights
@@ -169,13 +177,13 @@ def train(opt):
     ============================================
     Modify model
     '''
-    from efficientdet.model import Classifier
-    model.backbone_net.model._conv_stem.conv = nn.Conv2d(4, 48, kernel_size=(3, 3), stride=(2, 2), bias=False)
-    model.classifier.header.pointwise_conv.conv = nn.Conv2d(224, 9, kernel_size=(1, 1), stride=(1, 1))
-    model.classifier = Classifier(in_channels=model.fpn_num_filters[opt.compound_coef], num_anchors=model.num_anchors,
-                                     num_classes=1,
-                                     num_layers=model.box_class_repeats[opt.compound_coef],
-                                     pyramid_levels=model.pyramid_levels[opt.compound_coef])
+    # from efficientdet.model import Classifier
+    # model.backbone_net.model._conv_stem.conv = nn.Conv2d(4, 48, kernel_size=(3, 3), stride=(2, 2), bias=False)
+    # model.classifier.header.pointwise_conv.conv = nn.Conv2d(224, 9, kernel_size=(1, 1), stride=(1, 1))
+    # model.classifier = Classifier(in_channels=model.fpn_num_filters[opt.compound_coef], num_anchors=model.num_anchors,
+    #                                  num_classes=1,
+    #                                  num_layers=model.box_class_repeats[opt.compound_coef],
+    #                                  pyramid_levels=model.pyramid_levels[opt.compound_coef])
 
     '''
     =============================================
@@ -327,7 +335,7 @@ def train(opt):
                 writer.add_scalars('Loss', {'val': loss}, step)
                 writer.add_scalars('Regression_loss', {'val': reg_loss}, step)
                 writer.add_scalars('Classfication_loss', {'val': cls_loss}, step)
-
+                print('\n')
                 if loss + opt.es_min_delta < best_loss:
                     best_loss = loss
                     best_epoch = epoch
