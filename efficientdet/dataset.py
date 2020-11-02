@@ -368,54 +368,54 @@ class ComposeAlb(Compose):
         return format_string
 
 
-class TobyCustom4COCO(Dataset):
-    '''
-    Config dataset to load the fourth channel image and concate it to the original image,
-        and to easier to load my data.
-    '''
-    def __init__(self, root_dir, side_dir, annot_path, val = False ,transform=None):
-        # root_dir: 'D:/Etri_tracking_data/Etri_full/image_4channels_vol1/
-        self.root_dir = root_dir
-        self.names = [int(i.split('.')[0]) for i in os.listdir(self.root_dir)]
-        self.names.sort()
+# class TobyCustom4COCO(Dataset):
+#     '''
+#     Config dataset to load the fourth channel image and concate it to the original image,
+#         and to easier to load my data.
+#     '''
+#     def __init__(self, root_dir, side_dir, annot_path, val = False ,transform=None):
+#         # root_dir: 'D:/Etri_tracking_data/Etri_full/image_4channels_vol1/
+#         self.root_dir = root_dir
+#         self.names = [int(i.split('.')[0]) for i in os.listdir(self.root_dir)]
+#         self.names.sort()
 
-        # 'D:/Etri_tracking_data/Etri_full/image_vol1_Sejin/'
-        self.side_dir = side_dir
-        self.transform = transform
-        with open(annot_path, 'r') as f:
-            self.annot = f.readlines()
-        self.classes = {'ROI': 0}
-        self.labels = {0: 'ROI'}
+#         # 'D:/Etri_tracking_data/Etri_full/image_vol1_Sejin/'
+#         self.side_dir = side_dir
+#         self.transform = transform
+#         with open(annot_path, 'r') as f:
+#             self.annot = f.readlines()
+#         self.classes = {'ROI': 0}
+#         self.labels = {0: 'ROI'}
 
-    def __len__(self):
-        return len(self.names)
-        # return 10
+#     def __len__(self):
+#         return len(self.names)
+#         # return 10
 
-    def __getitem__(self, idx):
-        # close
-        image_path = self.names[idx]
-        image_path = str(image_path) + '.png'
-        img = self.load_image(image_path)
-        other_path = self.side_dir + image_path
-        last_layer = cv2.imread(other_path, 0)
-        last_layer = np.expand_dims(last_layer, axis = -1)
-        # Forgot last time
-        # last_layer/=255.
-        img = np.concatenate((img,last_layer), axis = 2)
-        annot = self.load_annotations(idx)
-        sample = {'img': img, 'annot': annot}
-        if self.transform:
-            sample = self.transform(sample)
-        return sample
+#     def __getitem__(self, idx):
+#         # close
+#         image_path = self.names[idx]
+#         image_path = str(image_path) + '.png'
+#         img = self.load_image(image_path)
+#         other_path = self.side_dir + image_path
+#         last_layer = cv2.imread(other_path, 0)
+#         last_layer = np.expand_dims(last_layer, axis = -1)
+#         # Forgot last time
+#         # last_layer/=255.
+#         img = np.concatenate((img,last_layer), axis = 2)
+#         annot = self.load_annotations(idx)
+#         sample = {'img': img, 'annot': annot}
+#         if self.transform:
+#             sample = self.transform(sample)
+#         return sample
 
-    def load_image(self, image_path):
-        path = self.root_dir + image_path
-        img = cv2.imread(path)
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        return img
-        # return img.astype(np.float32) / 255.
+#     def load_image(self, image_path):
+#         path = self.root_dir + image_path
+#         img = cv2.imread(path)
+#         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+#         return img
+#         # return img.astype(np.float32) / 255.
 
-    def load_annotations(self, image_index):
-        # annotation = [[float(i) for i in self.annot[image_index].split(',')] + [0]]
-        # return np.array(annotation)
+#     def load_annotations(self, image_index):
+#         # annotation = [[float(i) for i in self.annot[image_index].split(',')] + [0]]
+#         # return np.array(annotation)
         
