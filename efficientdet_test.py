@@ -30,12 +30,35 @@ from torchvision import transforms
 from tqdm.autonotebook import tqdm
 
 from backbone import EfficientDetBackbone
-from efficientdet.dataset import Resizer, Flip_X, Flip_Y, Normalizer, Equalize, Brightness, ComposeAlb, Constrast, collater, TobyCustom
+from efficientdet.dataset import Resizer, Flip_X, Flip_Y, Normalizer, Equalize, Brightness, ComposeAlb, Constrast, \
+    collater, TobyCustom, TobyCustom4COCO, collaterCOCO
 from efficientdet.loss import FocalLoss
 from utils.sync_batchnorm import patch_replication_callback
 from utils.utils import replace_w_sync_bn, CustomDataParallel, get_last_weights, init_weights, boolean_string
 
 from tqdm import tqdm
+
+def display(preds, imgs, imshow=True, imwrite=False):
+    # for i in range(len(imgs)):
+    # if len(preds[i]['rois']) == 0:
+        # continue
+
+    imgs = imgs.copy()
+    imgs = imgs.astype(np.uint8)
+
+    for j in range(len(preds[0]['rois'])):
+        x1, y1, x2, y2 = preds[0]['rois'][j].astype(np.int)
+        obj = obj_list[preds[0]['class_ids'][j]]
+        score = float(preds[0]['scores'][j])
+        cv2.rectangle(imgs, (x1, y1), (x2, y2), (255,0,0), 3)
+        cv2.putText(imgs, obj, (x1,y1), cv2.FONT_HERSHEY_SIMPLEX , 1, [0,0,255], 1, cv2.LINE_AA)
+
+    if imshow:
+        cv2.imshow('img', imgs)
+        cv2.waitKey(0)
+
+    if imwrite:
+        cv2.imwrite(f'test/img_inferred_d{compound_coef}_this_repo_{i}.jpg', imgs[i])
 
 compound_coef = 4
 force_input_size = None  # set None to use default size
@@ -51,8 +74,17 @@ iou_threshold = 0.2
 use_cuda = True
 use_float16 = False
 
-
-obj_list = ['ROI']
+obj_list = ['person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus', 'train', 'truck', 'boat', 'traffic light',
+            'fire hydrant', '', 'stop sign', 'parking meter', 'bench', 'bird', 'cat', 'dog', 'horse', 'sheep',
+            'cow', 'elephant', 'bear', 'zebra', 'giraffe', '', 'backpack', 'umbrella', '', '', 'handbag', 'tie',
+            'suitcase', 'frisbee', 'skis', 'snowboard', 'sports ball', 'kite', 'baseball bat', 'baseball glove',
+            'skateboard', 'surfboard', 'tennis racket', 'bottle', '', 'wine glass', 'cup', 'fork', 'knife', 'spoon',
+            'bowl', 'banana', 'apple', 'sandwich', 'orange', 'broccoli', 'carrot', 'hot dog', 'pizza', 'donut',
+            'cake', 'chair', 'couch', 'potted plant', 'bed', '', 'dining table', '', '', 'toilet', '', 'tv',
+            'laptop', 'mouse', 'remote', 'keyboard', 'cell phone', 'microwave', 'oven', 'toaster', 'sink',
+            'refrigerator', '', 'book', 'clock', 'vase', 'scissors', 'teddy bear', 'hair drier',
+            'toothbrush']
+# obj_list = ['ROI']
 
 
 color_list = standard_to_bgr(STANDARD_COLORS)
@@ -62,9 +94,9 @@ input_size = input_sizes[compound_coef] if force_input_size is None else force_i
 
 model = EfficientDetBackbone(compound_coef=compound_coef, num_classes=90,
                              ratios=anchor_ratios, scales=anchor_scales)
-print(model)
+# print(model)
 weights_path = './weights/efficientdet-d4.pth'
-model.load_state_dict(torch.load(weights_path), strict=False, map_location = 'cpu')
+model.load_state_dict(torch.load(weights_path, map_location = 'cpu'), strict=False)
 # model.backbone_net.model._conv_stem.conv = nn.Conv2d(4, 48, kernel_size=(3, 3), stride=(2, 2), bias=False)
 # model.classifier.header.pointwise_conv.conv = nn.Conv2d(224, 9, kernel_size=(1, 1), stride=(1, 1))
 # model.load_state_dict(torch.load('C:/Users/giang/Desktop/result/save/coco/efficientdet-d4_10_1500.pth', map_location='cpu'))
@@ -103,7 +135,7 @@ else:
 val_params = {'batch_size': 1,
                 'shuffle': False,
                 'drop_last': True,
-                'collate_fn': collater,
+                'collate_fn': collaterCOCO,
                 'num_workers': 0}
 
 input_sizes = [512, 640, 768, 896, 1024, 1280, 1280, 1536, 1536]
@@ -113,15 +145,15 @@ input_sizes = [512, 640, 768, 896, 1024, 1280, 1280, 1536, 1536]
 # ground_truth_val = 'D:/Etri_tracking_data/Etri_full/train_1024.txt'
 root_val = 'D:/COCO/val/val2017/'
 side_val = None
-ground_truth_val = 'D:/Etri_tracking_data/Etri_full/train_1024/'
+ground_truth_val = 'C:/Users/giang/Desktop/coco_val_2017.json'
 # root = '/home/../../data3/giangData/image_crop_1175x7680/'
 # side = '/home/../../data3/giangData/image_vol1_Sejin/'
 # ground_truth = '/home/../../data3/giangData/specific_train.txt'
 
-val_set = TobyCustom(root_dir=root_val, side_dir = side_val, \
+val_set = TobyCustom4COCO(root_dir=root_val, side_dir = side_val, \
                          annot_path = ground_truth_val, \
-                         transform=ComposeAlb([Resizer(input_sizes[4]),
-                                               Normalizer()]))
+                         transform=ComposeAlb([Resizer(input_sizes[4], 3),
+                                               Normalizer(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])]))
 val_generator = DataLoader(val_set, **val_params)
 
 with torch.no_grad():
@@ -129,6 +161,10 @@ with torch.no_grad():
         # print(torch.max(imgs))
         # print(imgs.shape)
         # from matplotlib import pyplot as plt
+        imgs = data['img']
+        annot = data['annot']
+        image_path = data['image_path']
+        print(image_path)
         # image = imgs[0]
         
         # image = image[0:3,:,:]
@@ -143,6 +179,7 @@ with torch.no_grad():
         # image = image.numpy()
         # image = np.einsum('abc->bca',image)
         # image = image[:,:,::-1]
+        # image = np.expand_dims(image, axis = 0)
         # print(torch.max(image))
         # print(torch.min(image))
         # print(image.shape)
@@ -151,8 +188,7 @@ with torch.no_grad():
 
         # print(image)
         # cv2.imwrite('C:/Users/giang/Desktop/some.png', image)
-        imgs = data['img']
-        annot = data['annot']
+        
 
         if params.num_gpus == 1:
             imgs = imgs.cuda()
@@ -171,7 +207,8 @@ with torch.no_grad():
                         anchors, regression, classification,
                         regressBoxes, clipBoxes,
                         threshold, iou_threshold)
-        print(out)
+        # print(out)
+        # display(out, image, imshow=True, imwrite=False)
         break
 
 
