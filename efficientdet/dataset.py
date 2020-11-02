@@ -240,8 +240,8 @@ class Flip_Y(object):
 class Normalizer(object):
     ''' Normalize image by it means and std, this mean and std from COCO '''
     def __init__(self, mean=[0.485, 0.456, 0.406, 0.5], std=[0.229, 0.224, 0.225, 0.5]):
-        mean=[0.485, 0.456, 0.406, 0] 
-        std=[0.229, 0.224, 0.225, 1]
+        # mean=[0.485, 0.456, 0.406, 0] 
+        # std=[0.229, 0.224, 0.225, 1]
         self.mean = np.array([[mean]])
         self.std = np.array([[std]])
 
