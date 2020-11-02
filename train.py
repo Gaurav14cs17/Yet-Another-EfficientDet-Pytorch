@@ -165,9 +165,21 @@ def train(opt):
         last_step = 0
         print('[Info] initializing weights...')
         init_weights(model)
-
+    '''
+    ============================================
+    Modify model
+    '''
+    from efficientdet.model import Classifier
     model.backbone_net.model._conv_stem.conv = nn.Conv2d(4, 48, kernel_size=(3, 3), stride=(2, 2), bias=False)
+    model.classifier.header.pointwise_conv.conv = nn.Conv2d(224, 9, kernel_size=(1, 1), stride=(1, 1))
+    model.classifier = Classifier(in_channels=model.fpn_num_filters[opt.compound_coef], num_anchors=model.num_anchors,
+                                     num_classes=1,
+                                     num_layers=model.box_class_repeats[opt.compound_coef],
+                                     pyramid_levels=model.pyramid_levels[opt.compound_coef])
 
+    '''
+    =============================================
+    '''
     # freeze backbone if train head_only
     if opt.head_only:
         def freeze_backbone(m):

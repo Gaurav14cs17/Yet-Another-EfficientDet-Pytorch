@@ -44,6 +44,8 @@ class EfficientDetBackbone(nn.Module):
                     use_p8=compound_coef > 7)
               for _ in range(self.fpn_cell_repeats[compound_coef])])
 
+        self.num_anchors = num_anchors
+
         self.num_classes = num_classes
         self.regressor = Regressor(in_channels=self.fpn_num_filters[self.compound_coef], num_anchors=num_anchors,
                                    num_layers=self.box_class_repeats[self.compound_coef],
