@@ -169,8 +169,9 @@ def collater(data):
 class Resizer(object):
     """Convert ndarrays in sample to Tensors."""
     
-    def __init__(self, img_size=512):
+    def __init__(self, img_size=512, num_channels = 4):
         self.img_size = img_size
+        self.num_channels = num_channels
 
     def __call__(self, sample):
         # print('Resizer')
@@ -188,7 +189,7 @@ class Resizer(object):
 
         image = cv2.resize(image, (resized_width, resized_height), interpolation=cv2.INTER_LINEAR)
 
-        new_image = np.zeros((self.img_size, self.img_size, 4))
+        new_image = np.zeros((self.img_size, self.img_size, self.num_channels))
         new_image[0:resized_height, 0:resized_width] = image
 
         annots[:, :4] *= scale
@@ -368,54 +369,80 @@ class ComposeAlb(Compose):
         return format_string
 
 
-# class TobyCustom4COCO(Dataset):
-#     '''
-#     Config dataset to load the fourth channel image and concate it to the original image,
-#         and to easier to load my data.
-#     '''
-#     def __init__(self, root_dir, side_dir, annot_path, val = False ,transform=None):
-#         # root_dir: 'D:/Etri_tracking_data/Etri_full/image_4channels_vol1/
-#         self.root_dir = root_dir
-#         self.names = [int(i.split('.')[0]) for i in os.listdir(self.root_dir)]
-#         self.names.sort()
+class TobyCustom4COCO(Dataset):
+    '''
+    Config dataset to load the fourth channel image and concate it to the original image,
+        and to easier to load my data.
+    '''
+    def __init__(self, root_dir, side_dir, annot_path, val = False ,transform=None):
+        # root_dir: 'D:/Etri_tracking_data/Etri_full/image_4channels_vol1/
+        self.root_dir = root_dir
+        self.names = os.listdir(self.root_dir)
+        # self.names = [int(i.split('.')[0]) for i in os.listdir(self.root_dir)]
+        # self.names.sort()
 
-#         # 'D:/Etri_tracking_data/Etri_full/image_vol1_Sejin/'
-#         self.side_dir = side_dir
-#         self.transform = transform
-#         with open(annot_path, 'r') as f:
-#             self.annot = f.readlines()
-#         self.classes = {'ROI': 0}
-#         self.labels = {0: 'ROI'}
+        # 'D:/Etri_tracking_data/Etri_full/image_vol1_Sejin/'
+        self.side_dir = side_dir
+        self.transform = transform
+        import json
+        with open(annot_path, 'r') as f:
+            self.annot = json.load(f)
+        self.classes = {'ROI': 0}
+        self.labels = {0: 'ROI'}
 
-#     def __len__(self):
-#         return len(self.names)
-#         # return 10
+    def __len__(self):
+        return len(self.names)
+        # return 10
 
-#     def __getitem__(self, idx):
-#         # close
-#         image_path = self.names[idx]
-#         image_path = str(image_path) + '.png'
-#         img = self.load_image(image_path)
-#         other_path = self.side_dir + image_path
-#         last_layer = cv2.imread(other_path, 0)
-#         last_layer = np.expand_dims(last_layer, axis = -1)
-#         # Forgot last time
-#         # last_layer/=255.
-#         img = np.concatenate((img,last_layer), axis = 2)
-#         annot = self.load_annotations(idx)
-#         sample = {'img': img, 'annot': annot}
-#         if self.transform:
-#             sample = self.transform(sample)
-#         return sample
+    def __getitem__(self, idx):
+        # close
+        image_path = self.names[idx]
+        # image_path = str(image_path) + '.png'
+        img = self.load_image(image_path)
+        # other_path = self.side_dir + image_path
+        # last_layer = cv2.imread(other_path, 0)
+        # last_layer = np.expand_dims(last_layer, axis = -1)
+        # Forgot last time
+        # last_layer/=255.
+        # img = np.concatenate((img,last_layer), axis = 2)
+        annot = self.load_annotations(image_path)
+        sample = {'img': img, 'annot': annot}
+        if self.transform:
+            sample = self.transform(sample)
+        sample['image_path'] = image_path
+        return sample
 
-#     def load_image(self, image_path):
-#         path = self.root_dir + image_path
-#         img = cv2.imread(path)
-#         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-#         return img
-#         # return img.astype(np.float32) / 255.
+    def load_image(self, image_path):
+        path = self.root_dir + image_path
+        img = cv2.imread(path)
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        return img
+        # return img.astype(np.float32) / 255.
 
-#     def load_annotations(self, image_index):
-#         # annotation = [[float(i) for i in self.annot[image_index].split(',')] + [0]]
-#         # return np.array(annotation)
-        
+    def load_annotations(self, image_path):
+        return np.array(self.annot[image_path]).astype(np.float32)
+
+def collaterCOCO(data):
+    ''' Convert numpy array to Tensor '''
+    imgs = [s['img'] for s in data]
+    annots = [s['annot'] for s in data]
+    scales = [s['scale'] for s in data]
+    image_path = [s['image_path'] for s in data]
+
+    imgs = torch.from_numpy(np.stack(imgs, axis=0))
+
+    max_num_annots = max(annot.shape[0] for annot in annots)
+
+    if max_num_annots > 0:
+
+        annot_padded = torch.ones((len(annots), max_num_annots, 5)) * -1
+
+        for idx, annot in enumerate(annots):
+            if annot.shape[0] > 0:
+                annot_padded[idx, :annot.shape[0], :] = annot
+    else:
+        annot_padded = torch.ones((len(annots), 1, 5)) * -1
+
+    imgs = imgs.permute(0, 3, 1, 2)
+
+    return {'img': imgs, 'annot': annot_padded, 'scale': scales, 'image_path': image_path}
