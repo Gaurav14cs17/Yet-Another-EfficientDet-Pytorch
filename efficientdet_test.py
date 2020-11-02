@@ -62,11 +62,12 @@ input_size = input_sizes[compound_coef] if force_input_size is None else force_i
 
 model = EfficientDetBackbone(compound_coef=compound_coef, num_classes=90,
                              ratios=anchor_ratios, scales=anchor_scales)
-# weights_path = './weights/efficientdet-d4.pth'
-# model.load_state_dict(torch.load(weights_path), strict=False)
-model.backbone_net.model._conv_stem.conv = nn.Conv2d(4, 48, kernel_size=(3, 3), stride=(2, 2), bias=False)
-
-model.load_state_dict(torch.load('C:/Users/giang/Desktop/result/save/coco/efficientdet-d4_10_1500.pth', map_location='cpu'))
+print(model)
+weights_path = './weights/efficientdet-d4.pth'
+model.load_state_dict(torch.load(weights_path), strict=False, map_location = 'cpu')
+# model.backbone_net.model._conv_stem.conv = nn.Conv2d(4, 48, kernel_size=(3, 3), stride=(2, 2), bias=False)
+# model.classifier.header.pointwise_conv.conv = nn.Conv2d(224, 9, kernel_size=(1, 1), stride=(1, 1))
+# model.load_state_dict(torch.load('C:/Users/giang/Desktop/result/save/coco/efficientdet-d4_10_1500.pth', map_location='cpu'))
 # model.load_state_dict(torch.load(f'weights/efficientdet-d{compound_coef}.pth', map_location='cpu'))
 model.requires_grad_(False)
 model.eval()
@@ -99,7 +100,6 @@ else:
 # os.makedirs(opt.log_path, exist_ok=True)
 # os.makedirs(opt.saved_path, exist_ok=True)
 
-
 val_params = {'batch_size': 1,
                 'shuffle': False,
                 'drop_last': True,
@@ -108,9 +108,9 @@ val_params = {'batch_size': 1,
 
 input_sizes = [512, 640, 768, 896, 1024, 1280, 1280, 1536, 1536]
 
-root_val = 'D:/Etri_tracking_data/Etri_full/val_1024/'
-side_val = 'D:/Etri_tracking_data/Etri_full/val_Sejin_1024/'
-ground_truth_val = 'D:/Etri_tracking_data/Etri_full/val_1024.txt'
+root_val = 'D:/Etri_tracking_data/Etri_full/train_1024/'
+side_val = 'D:/Etri_tracking_data/Etri_full/train_Sejin_1024/'
+ground_truth_val = 'D:/Etri_tracking_data/Etri_full/train_1024.txt'
 # root = '/home/../../data3/giangData/image_crop_1175x7680/'
 # side = '/home/../../data3/giangData/image_vol1_Sejin/'
 # ground_truth = '/home/../../data3/giangData/specific_train.txt'
@@ -120,7 +120,6 @@ val_set = TobyCustom(root_dir=root_val, side_dir = side_val, \
                          transform=ComposeAlb([Resizer(input_sizes[4]),
                                                Normalizer()]))
 val_generator = DataLoader(val_set, **val_params)
-
 
 with torch.no_grad():
     for iter, data in enumerate(val_generator):
@@ -161,16 +160,16 @@ with torch.no_grad():
         print(regression.shape)
         print(classification.shape)
         print(anchors.shape)
-        break
+        # break
         regressBoxes = BBoxTransform()
         clipBoxes = ClipBoxes()
 
-        out = postprocess(x,
+        out = postprocess(imgs,
                         anchors, regression, classification,
                         regressBoxes, clipBoxes,
                         threshold, iou_threshold)
         print(out)
-        
+        break
 
 
 
