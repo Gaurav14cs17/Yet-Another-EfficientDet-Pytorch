@@ -39,7 +39,7 @@ def get_args():
     parser.add_argument('--head_only', type=boolean_string, default=False,
                         help='whether finetunes only the regressor and the classifier, '
                              'useful in early stage convergence or small/easy dataset')
-    parser.add_argument('--lr', type=float, default=1e-4)
+    parser.add_argument('--lr', type=float, default=1e-5)
     parser.add_argument('--optim', type=str, default='SGD', help='select optimizer for training, '
                                                                    'suggest using \'admaw\' until the'
                                                                    ' very final stage then switch to \'sgd\'')
@@ -147,7 +147,7 @@ def train(opt):
                                      num_classes=1,
                                      num_layers=model.box_class_repeats[opt.compound_coef],
                                      pyramid_levels=model.pyramid_levels[opt.compound_coef])
-    opt.load_weights = '/home/vcl/giang/result_to53/save/coco/efficientdet-d4_53_7500.pth'
+    opt.load_weights = '/home/vcl/giang/result_to88/save/coco/efficientdet-d4_88_12500.pth'
     # for EfficientNetB5, please test again with B4
 
     # load last weights
