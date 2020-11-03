@@ -439,10 +439,16 @@ def collaterCOCO(data):
 
         for idx, annot in enumerate(annots):
             if annot.shape[0] > 0:
-                annot_padded[idx, :annot.shape[0], :] = annot
+                try:
+                    annot_padded[idx, :annot.shape[0], :] = annot
+                except:
+                    pass
     else:
         annot_padded = torch.ones((len(annots), 1, 5)) * -1
-
+    # print('=======')
+    # print(image_path)
+    # print(annot_padded)
+    # print('=======')
     imgs = imgs.permute(0, 3, 1, 2)
 
     return {'img': imgs, 'annot': annot_padded, 'scale': scales, 'image_path': image_path}

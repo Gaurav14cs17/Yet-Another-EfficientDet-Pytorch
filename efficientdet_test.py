@@ -38,27 +38,21 @@ from utils.utils import replace_w_sync_bn, CustomDataParallel, get_last_weights,
 
 from tqdm import tqdm
 
-def display(preds, imgs, imshow=True, imwrite=False):
-    # for i in range(len(imgs)):
-    # if len(preds[i]['rois']) == 0:
-        # continue
-
-    imgs = imgs.copy()
-    imgs = imgs.astype(np.uint8)
-
-    for j in range(len(preds[0]['rois'])):
-        x1, y1, x2, y2 = preds[0]['rois'][j].astype(np.int)
-        obj = obj_list[preds[0]['class_ids'][j]]
-        score = float(preds[0]['scores'][j])
-        cv2.rectangle(imgs, (x1, y1), (x2, y2), (255,0,0), 3)
-        cv2.putText(imgs, obj, (x1,y1), cv2.FONT_HERSHEY_SIMPLEX , 1, [0,0,255], 1, cv2.LINE_AA)
-
-    if imshow:
-        cv2.imshow('img', imgs)
-        cv2.waitKey(0)
-
-    if imwrite:
-        cv2.imwrite(f'test/img_inferred_d{compound_coef}_this_repo_{i}.jpg', imgs[i])
+def extract_from_output(image_name, output, category):
+    result_dir = 'C:/Users/giang/Desktop/tool/mAP/input/detection-results/'
+    for k,name in enumerate(image_name):
+        name = name.split('.')[0] + '.txt'
+        this_output = output[k]
+        rois = this_output['rois'].astype(np.int32)
+        scores = np.round(this_output['scores'], 6)
+        classes = this_output['class_ids']
+        with open(result_dir + name, 'w') as f:
+            for idx in range(len(scores)):
+                label = str(category[classes[idx]])
+                score = str(scores[idx])
+                roi = ' '.join([str(i) for i in rois[idx]]) + '\n'
+                content = label + ' ' + score + ' ' + roi
+                f.write(content)
 
 compound_coef = 4
 force_input_size = None  # set None to use default size
@@ -86,6 +80,11 @@ obj_list = ['person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus', 'train'
             'toothbrush']
 # obj_list = ['ROI']
 
+def toCategory(obj):
+    mlem = dict()
+    for k,v in enumerate(obj):
+        mlem[k] = v
+    return mlem
 
 color_list = standard_to_bgr(STANDARD_COLORS)
 # tf bilinear interpolation is different from any other's, just make do
@@ -132,7 +131,7 @@ else:
 # os.makedirs(opt.log_path, exist_ok=True)
 # os.makedirs(opt.saved_path, exist_ok=True)
 
-val_params = {'batch_size': 1,
+val_params = {'batch_size': 8,
                 'shuffle': False,
                 'drop_last': True,
                 'collate_fn': collaterCOCO,
@@ -156,15 +155,19 @@ val_set = TobyCustom4COCO(root_dir=root_val, side_dir = side_val, \
                                                Normalizer(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])]))
 val_generator = DataLoader(val_set, **val_params)
 
+from tqdm import tqdm
+val_gen = tqdm(val_generator)
+
 with torch.no_grad():
-    for iter, data in enumerate(val_generator):
+    # for iter, data in enumerate(val_generator):
+    for iter, data in enumerate(val_gen):
         # print(torch.max(imgs))
         # print(imgs.shape)
         # from matplotlib import pyplot as plt
         imgs = data['img']
         annot = data['annot']
         image_path = data['image_path']
-        print(image_path)
+        # print(image_path)
         # image = imgs[0]
         
         # image = image[0:3,:,:]
@@ -196,9 +199,9 @@ with torch.no_grad():
 
         _, regression, classification, anchors = model(imgs)
         # print(regression)
-        print(regression.shape)
-        print(classification.shape)
-        print(anchors.shape)
+        # print(regression.shape)
+        # print(classification.shape)
+        # print(anchors.shape)
         # break
         regressBoxes = BBoxTransform()
         clipBoxes = ClipBoxes()
@@ -207,9 +210,10 @@ with torch.no_grad():
                         anchors, regression, classification,
                         regressBoxes, clipBoxes,
                         threshold, iou_threshold)
+        extract_from_output(image_path, out, toCategory(obj_list))
         # print(out)
         # display(out, image, imshow=True, imwrite=False)
-        break
+        # break
 
 
 
@@ -256,35 +260,3 @@ def display(preds, imgs, imshow=True, imwrite=False):
             cv2.imwrite(f'test/img_inferred_d{compound_coef}_this_repo_{i}.jpg', imgs[i])
 
 
-# out = invert_affine(framed_metas, out)
-# display(out, ori_imgs, imshow=False, imwrite=True)
-
-# print('running speed test...')
-# with torch.no_grad():
-#     print('test1: model inferring and postprocessing')
-#     print('inferring image for 10 times...')
-#     t1 = time.time()
-#     for _ in range(10):
-#         _, regression, classification, anchors = model(x)
-
-#         out = postprocess(x,
-#                           anchors, regression, classification,
-#                           regressBoxes, clipBoxes,
-#                           threshold, iou_threshold)
-#         out = invert_affine(framed_metas, out)
-
-#     t2 = time.time()
-#     tact_time = (t2 - t1) / 10
-#     print(f'{tact_time} seconds, {1 / tact_time} FPS, @batch_size 1')
-
-    # uncomment this if you want a extreme fps test
-    # print('test2: model inferring only')
-    # print('inferring images for batch_size 32 for 10 times...')
-    # t1 = time.time()
-    # x = torch.cat([x] * 32, 0)
-    # for _ in range(10):
-    #     _, regression, classification, anchors = model(x)
-    #
-    # t2 = time.time()
-    # tact_time = (t2 - t1) / 10
-    # print(f'{tact_time} seconds, {32 / tact_time} FPS, @batch_size 32')
