@@ -34,8 +34,8 @@ def get_args():
     parser = argparse.ArgumentParser('Yet Another EfficientDet Pytorch: SOTA object detection network - Zylo117')
     parser.add_argument('-p', '--project', type=str, default='coco', help='project file that contains parameters')
     parser.add_argument('-c', '--compound_coef', type=int, default=4, help='coefficients of efficientdet')
-    parser.add_argument('-n', '--num_workers', type=int, default=16, help='num_workers of dataloader')
-    parser.add_argument('--batch_size', type=int, default=4, help='The number of images per batch among all devices')
+    parser.add_argument('-n', '--num_workers', type=int, default=1, help='num_workers of dataloader')
+    parser.add_argument('--batch_size', type=int, default=2, help='The number of images per batch among all devices')
     parser.add_argument('--head_only', type=boolean_string, default=False,
                         help='whether finetunes only the regressor and the classifier, '
                              'useful in early stage convergence or small/easy dataset')
@@ -69,9 +69,34 @@ class ModelWithLoss(nn.Module):
         self.criterion = FocalLoss()
         self.model = model
         self.debug = debug
+        
+        
+        self.one = True
+        
+        
 
     def forward(self, imgs, annotations, obj_list=None):
         _, regression, classification, anchors = self.model(imgs)
+        # if self.one:
+        #     from efficientdet.utils import BBoxTransform, ClipBoxes
+        #     from utils.utils import postprocess
+            
+        #     regression = regression.detach()
+        #     classification = classification.detach()
+        #     anchors = anchors.detach()
+
+        #     threshold = 0.2
+        #     iou_threshold = 0.2
+        #     regressBoxes = BBoxTransform()
+        #     clipBoxes = ClipBoxes()
+
+        #     out = postprocess(imgs,
+        #                     anchors, regression, classification,
+        #                     regressBoxes, clipBoxes,
+        #                     threshold, iou_threshold)
+        #     print(out)
+        #     self.one = False
+
         if self.debug:
             cls_loss, reg_loss = self.criterion(classification, regression, anchors, annotations,
                                                 imgs=imgs, obj_list=obj_list)
@@ -82,7 +107,12 @@ class ModelWithLoss(nn.Module):
 
 def train(opt):
     params = Params(f'projects/{opt.project}.yml')
-    params.num_gpus = 4
+
+    
+    params.num_gpus = 1
+    opt.log_path = 'C:/Users/giang/Desktop/result_temp/'
+    
+    
     if params.num_gpus == 0:
         os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
 
@@ -110,12 +140,12 @@ def train(opt):
 
     input_sizes = [512, 640, 768, 896, 1024, 1280, 1280, 1536, 1536]
 
-    # root = 'D:/Etri_tracking_data/Etri_full/image_crop_1175x7680/'
-    # side = 'D:/Etri_tracking_data/Etri_full/image_vol1_Sejin/'
-    # ground_truth = 'C:/Users/giang/Desktop/specific_train.txt'
-    root_train = '/home/../../data3/giangData/train_1024/'
-    side_train = '/home/../../data3/giangData/train_Sejin_1024/'
-    ground_truth_train = '/home/../../data3/giangData/train_1024.txt'
+    root_train = 'D:/Etri_tracking_data/Etri_full/train_1024/'
+    side_train = 'D:/Etri_tracking_data/Etri_full/train_Sejin_1024/'
+    ground_truth_train = 'D:/Etri_tracking_data/Etri_full/train_1024.txt'
+    # root_train = '/home/../../data3/giangData/train_1024/'
+    # side_train = '/home/../../data3/giangData/train_Sejin_1024/'
+    # ground_truth_train = '/home/../../data3/giangData/train_1024.txt'
     
     training_set = TobyCustom(root_dir=root_train, side_dir = side_train, \
                               annot_path = ground_truth_train, \
@@ -128,9 +158,9 @@ def train(opt):
                                                     Normalizer()])) 
     training_generator = DataLoader(training_set, **training_params)
 
-    root_val = '/home/../../data3/giangData/val_1024/'
-    side_val = '/home/../../data3/giangData/val_Sejin_1024/'
-    ground_truth_val = '/home/../../data3/giangData/val_1024.txt'
+    root_val = 'D:/Etri_tracking_data/Etri_full/val_1024/'
+    side_val = 'D:/Etri_tracking_data/Etri_full/val_Sejin_1024/'
+    ground_truth_val = 'D:/Etri_tracking_data/Etri_full/val_1024.txt'
     
     val_set = TobyCustom(root_dir=root_val, side_dir = side_val, \
                          annot_path = ground_truth_val, \
@@ -147,7 +177,7 @@ def train(opt):
                                      num_classes=1,
                                      num_layers=model.box_class_repeats[opt.compound_coef],
                                      pyramid_levels=model.pyramid_levels[opt.compound_coef])
-    opt.load_weights = '/home/vcl/giang/result_to102/save/coco/efficientdet-d4_102_14500.pth'
+    opt.load_weights = 'C:/Users/giang/Desktop/efficientdet-d4_107_15228_6.1788892433756875.pth'
     # for EfficientNetB5, please test again with B4
 
     # load last weights
@@ -255,6 +285,12 @@ def train(opt):
                 try:
                     imgs = data['img']
                     annot = data['annot']
+                    
+                    
+                    image_path = data['image_path']
+                    print(image_path)
+
+
 
                     if params.num_gpus == 1:
                         # if only one gpu, just send it to cuda:0

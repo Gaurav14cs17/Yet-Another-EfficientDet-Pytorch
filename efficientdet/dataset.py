@@ -104,11 +104,11 @@ class TobyCustom(Dataset):
 
     def __len__(self):
         number = len(self.names)
-        if number > 1000:
-            return number//3
-        else:
-            return number
-        # return len(self.names)
+        # if number > 1000:
+        #     return number//3
+        # else:
+        #     return number
+        return len(self.names)
 
         # return 10
 
@@ -127,6 +127,7 @@ class TobyCustom(Dataset):
         sample = {'img': img, 'annot': annot}
         if self.transform:
             sample = self.transform(sample)
+        sample['image_path'] = image_path
         return sample
 
     def load_image(self, image_path):
@@ -146,6 +147,7 @@ def collater(data):
     imgs = [s['img'] for s in data]
     annots = [s['annot'] for s in data]
     scales = [s['scale'] for s in data]
+    image_path = [s['image_path'] for s in data]
 
     imgs = torch.from_numpy(np.stack(imgs, axis=0))
 
@@ -163,7 +165,7 @@ def collater(data):
 
     imgs = imgs.permute(0, 3, 1, 2)
 
-    return {'img': imgs, 'annot': annot_padded, 'scale': scales}
+    return {'img': imgs, 'annot': annot_padded, 'scale': scales, 'image_path': image_path}
 
 
 class Resizer(object):
