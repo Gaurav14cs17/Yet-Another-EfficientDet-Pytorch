@@ -117,12 +117,12 @@ class TobyCustom(Dataset):
         image_path = self.names[idx]
         image_path = str(image_path) + '.png'
         img = self.load_image(image_path)
-        other_path = self.side_dir + image_path
-        last_layer = cv2.imread(other_path, 0)
-        last_layer = np.expand_dims(last_layer, axis = -1)
+        # other_path = self.side_dir + image_path
+        # last_layer = cv2.imread(other_path, 0)
+        # last_layer = np.expand_dims(last_layer, axis = -1)
         # Forgot last time
         # last_layer/=255.
-        img = np.concatenate((img,last_layer), axis = 2)
+        # img = np.concatenate((img,last_layer), axis = 2)
         annot = self.load_annotations(idx)
         sample = {'img': img, 'annot': annot}
         if self.transform:

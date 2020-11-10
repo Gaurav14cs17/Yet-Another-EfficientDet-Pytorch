@@ -34,13 +34,13 @@ def get_args():
     parser = argparse.ArgumentParser('Yet Another EfficientDet Pytorch: SOTA object detection network - Zylo117')
     parser.add_argument('-p', '--project', type=str, default='coco', help='project file that contains parameters')
     parser.add_argument('-c', '--compound_coef', type=int, default=4, help='coefficients of efficientdet')
-    parser.add_argument('-n', '--num_workers', type=int, default=1, help='num_workers of dataloader')
-    parser.add_argument('--batch_size', type=int, default=2, help='The number of images per batch among all devices')
+    parser.add_argument('-n', '--num_workers', type=int, default=0, help='num_workers of dataloader')
+    parser.add_argument('--batch_size', type=int, default=1, help='The number of images per batch among all devices')
     parser.add_argument('--head_only', type=boolean_string, default=False,
                         help='whether finetunes only the regressor and the classifier, '
                              'useful in early stage convergence or small/easy dataset')
-    parser.add_argument('--lr', type=float, default=1e-3)
-    parser.add_argument('--optim', type=str, default='SGD', help='select optimizer for training, '
+    parser.add_argument('--lr', type=float, default=1e-5)
+    parser.add_argument('--optim', type=str, default='adamW', help='select optimizer for training, '
                                                                    'suggest using \'admaw\' until the'
                                                                    ' very final stage then switch to \'sgd\'')
     parser.add_argument('--num_epochs', type=int, default=500)
@@ -62,6 +62,8 @@ def get_args():
     args = parser.parse_args()
     return args
 
+from efficientdet.utils import BBoxTransform, ClipBoxes
+from utils.utils import postprocess
 
 class ModelWithLoss(nn.Module):
     def __init__(self, model, debug=False):
@@ -69,31 +71,27 @@ class ModelWithLoss(nn.Module):
         self.criterion = FocalLoss()
         self.model = model
         self.debug = debug
-        
-        
         self.one = True
-        
         
 
     def forward(self, imgs, annotations, obj_list=None):
         _, regression, classification, anchors = self.model(imgs)
-        # if self.one:
-        #     from efficientdet.utils import BBoxTransform, ClipBoxes
-        #     from utils.utils import postprocess
-            
-        #     regression = regression.detach()
-        #     classification = classification.detach()
-        #     anchors = anchors.detach()
+        
+        if val:    
+            regression = regression.detach()
+            classification = classification.detach()
+            anchors = anchors.detach()
 
-        #     threshold = 0.2
-        #     iou_threshold = 0.2
-        #     regressBoxes = BBoxTransform()
-        #     clipBoxes = ClipBoxes()
+            threshold = 0.2
+            iou_threshold = 0.2
+            regressBoxes = BBoxTransform()
+            clipBoxes = ClipBoxes()
 
-        #     out = postprocess(imgs,
-        #                     anchors, regression, classification,
-        #                     regressBoxes, clipBoxes,
-        #                     threshold, iou_threshold)
+            out = postprocess(imgs,
+                            anchors, regression, classification,
+                            regressBoxes, clipBoxes,
+                            threshold, iou_threshold)
+            print(out)
         #     print(out)
         #     self.one = False
 
@@ -107,11 +105,8 @@ class ModelWithLoss(nn.Module):
 
 def train(opt):
     params = Params(f'projects/{opt.project}.yml')
-
-    
     params.num_gpus = 1
-    opt.log_path = 'C:/Users/giang/Desktop/result_temp/'
-    
+    # opt.log_path = 'C:/Users/giang/Desktop/result_temp/'
     
     if params.num_gpus == 0:
         os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
@@ -140,12 +135,12 @@ def train(opt):
 
     input_sizes = [512, 640, 768, 896, 1024, 1280, 1280, 1536, 1536]
 
-    root_train = 'D:/Etri_tracking_data/Etri_full/train_1024/'
-    side_train = 'D:/Etri_tracking_data/Etri_full/train_Sejin_1024/'
-    ground_truth_train = 'D:/Etri_tracking_data/Etri_full/train_1024.txt'
-    # root_train = '/home/../../data3/giangData/train_1024/'
-    # side_train = '/home/../../data3/giangData/train_Sejin_1024/'
-    # ground_truth_train = '/home/../../data3/giangData/train_1024.txt'
+    # root_train = 'D:/Etri_tracking_data/Etri_full/train_1024/'
+    # side_train = 'D:/Etri_tracking_data/Etri_full/train_Sejin_1024/'
+    # ground_truth_train = 'D:/Etri_tracking_data/Etri_full/train_1024.txt'
+    root_train = '/home/../../data3/giangData/train_1024/'
+    side_train = '/home/../../data3/giangData/train_Sejin_1024/'
+    ground_truth_train = '/home/../../data3/giangData/train_1024.txt'
     
     training_set = TobyCustom(root_dir=root_train, side_dir = side_train, \
                               annot_path = ground_truth_train, \
@@ -154,8 +149,8 @@ def train(opt):
                                                     Equalize(), \
                                                     Brightness(), \
                                                     Constrast(), \
-                                                    Resizer(input_sizes[opt.compound_coef]), \
-                                                    Normalizer()])) 
+                                                    Resizer(input_sizes[opt.compound_coef], num_channels=3), \
+                                                    Normalizer(mean = [0.485, 0.456, 0.406], std = [0.229, 0.224, 0.225, 0.5])])) 
     training_generator = DataLoader(training_set, **training_params)
 
     root_val = 'D:/Etri_tracking_data/Etri_full/val_1024/'
@@ -164,20 +159,22 @@ def train(opt):
     
     val_set = TobyCustom(root_dir=root_val, side_dir = side_val, \
                          annot_path = ground_truth_val, \
-                         transform=ComposeAlb([Resizer(input_sizes[opt.compound_coef]),
-                                               Normalizer()]))
+                         transform=ComposeAlb([Resizer(input_sizes[opt.compound_coef], num_channels=3),
+                                               Normalizer(mean = [0.485, 0.456, 0.406], std = [0.229, 0.224, 0.225, 0.5])]))
     val_generator = DataLoader(val_set, **val_params)
 
     model = EfficientDetBackbone(num_classes=len(params.obj_list), compound_coef=opt.compound_coef,
                                  ratios=eval(params.anchors_ratios), scales=eval(params.anchors_scales))
     from efficientdet.model import Classifier
-    model.backbone_net.model._conv_stem.conv = nn.Conv2d(4, 48, kernel_size=(3, 3), stride=(2, 2), bias=False)
+    # model.backbone_net.model._conv_stem.conv = nn.Conv2d(4, 48, kernel_size=(3, 3), stride=(2, 2), bias=False)
     model.classifier.header.pointwise_conv.conv = nn.Conv2d(224, 9, kernel_size=(1, 1), stride=(1, 1))
     model.classifier = Classifier(in_channels=model.fpn_num_filters[opt.compound_coef], num_anchors=model.num_anchors,
                                      num_classes=1,
                                      num_layers=model.box_class_repeats[opt.compound_coef],
                                      pyramid_levels=model.pyramid_levels[opt.compound_coef])
-    opt.load_weights = 'C:/Users/giang/Desktop/efficientdet-d4_107_15228_6.1788892433756875.pth'
+    # opt.load_weights = 'C:/Users/giang/Desktop/efficientdet-d4_107_15228_6.1788892433756875.pth'
+    opt.load_weights = './weights/efficientdet-d4.pth':
+        block'
     # for EfficientNetB5, please test again with B4
 
     # load last weights
