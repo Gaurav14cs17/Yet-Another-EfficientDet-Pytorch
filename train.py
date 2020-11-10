@@ -339,6 +339,7 @@ def train(opt):
 
             if epoch % opt.val_interval == 0:
                 model.eval()
+                
                 loss_regression_ls = []
                 loss_classification_ls = []
                 for iter, data in enumerate(val_generator):
