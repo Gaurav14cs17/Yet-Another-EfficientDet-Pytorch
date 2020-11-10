@@ -103,14 +103,14 @@ class TobyCustom(Dataset):
         self.labels = {0: 'ROI'}
 
     def __len__(self):
-        number = len(self.names)
+        # number = len(self.names)
         # if number > 1000:
         #     return number//3
         # else:
         #     return number
         return len(self.names)
 
-        # return 10
+        # return 30
 
     def __getitem__(self, idx):
         # close
