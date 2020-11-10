@@ -122,7 +122,7 @@ class TobyCustom(Dataset):
         # last_layer = np.expand_dims(last_layer, axis = -1)
         # Forgot last time
         # last_layer/=255.
-        # img = np.concatenate((img,last_layer), axis = 2)
+        img = np.concatenate((img,last_layer), axis = 2)
         annot = self.load_annotations(idx)
         sample = {'img': img, 'annot': annot}
         if self.transform:
