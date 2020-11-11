@@ -39,7 +39,8 @@ from utils.utils import replace_w_sync_bn, CustomDataParallel, get_last_weights,
 from tqdm import tqdm
 
 def extract_from_output(image_name, output, category):
-    result_dir = 'C:/Users/giang/Desktop/tool/mAP/input/etri/etri_val/'
+    # result_dir = 'C:/Users/giang/Desktop/tool/mAP/input/etri/etri_val/'
+    result_dir = 'C:/Users/giang/Desktop/val_result/'
     for k,name in enumerate(image_name):
         name = name.split('.')[0] + '.txt'
         this_output = output[k]
@@ -104,11 +105,11 @@ model = EfficientDetBackbone(num_classes=len(params.obj_list), compound_coef=4,
                                  ratios=eval(params.anchors_ratios), scales=eval(params.anchors_scales))
 # print(model)
 # weights_path = './weights/efficientdet-d4.pth'
-weights_path = 'C:/Users/giang/Desktop/efficientdet-d4_107_15228_6.1788892433756875.pth'
+weights_path = 'C:/Users/giang/Desktop/efficientdet-d4_24_3500.pth'
 # model.load_state_dict(torch.load(weights_path, map_location = 'cpu'), strict=False)
 from efficientdet.model import Classifier
-model.backbone_net.model._conv_stem.conv = nn.Conv2d(4, 48, kernel_size=(3, 3), stride=(2, 2), bias=False)
-model.classifier.header.pointwise_conv.conv = nn.Conv2d(224, 9, kernel_size=(1, 1), stride=(1, 1))
+# model.backbone_net.model._conv_stem.conv = nn.Conv2d(4, 48, kernel_size=(3, 3), stride=(2, 2), bias=False)
+# model.classifier.header.pointwise_conv.conv = nn.Conv2d(224, 9, kernel_size=(1, 1), stride=(1, 1))
 model.classifier = Classifier(in_channels=model.fpn_num_filters[4], num_anchors=model.num_anchors,
                             num_classes=1,
                             num_layers=model.box_class_repeats[4],
@@ -153,8 +154,8 @@ side_val = 'D:/Etri_tracking_data/Etri_full/val_Sejin_1024/'
 ground_truth_val = 'D:/Etri_tracking_data/Etri_full/val_1024.txt'
 val_set = TobyCustom(root_dir=root_val, side_dir = side_val, \
                          annot_path = ground_truth_val, \
-                         transform=ComposeAlb([Resizer(input_sizes[4]),
-                                               Normalizer()]))
+                         transform=ComposeAlb([Resizer(input_sizes[4], num_channels=3),
+                                               Normalizer(mean = [0.485, 0.456, 0.406], std = [0.229, 0.224, 0.225])]))
 
                                                
 val_generator = DataLoader(val_set, **val_params)
@@ -240,9 +241,9 @@ with torch.no_grad():
                         regressBoxes, clipBoxes,
                         threshold, iou_threshold)
         # print(image_path)
-        print(out)
-        break
-        # extract_from_output(image_path, out, toCategory(obj_list))
+        # print(out)
+        # break
+        extract_from_output(image_path, out, toCategory(obj_list))
         # print(out)
         # display(out, image, imshow=True, imwrite=False)
         # break
